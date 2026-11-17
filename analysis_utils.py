@@ -1,9 +1,7 @@
-
+"""Reusable calculations for country profiles and comparative analysis."""
 import numpy as np
 import pandas as pd
 
-
-# Names of indicators used in the dashboard
 METRICS = {
     "gdp_current_usd": "GDP (current US$)",
     "gdp_constant_usd": "GDP (constant 2015 US$)",
@@ -23,8 +21,7 @@ METRICS = {
     "gdp_per_capita_yoy_pct": "GDP per capita annual change (%)",
 }
 
-
-# Weights used to calculate the development index
+# Higher is desirable for all except unemployment, which is reversed.
 INDEX_WEIGHTS = {
     "gdp_per_capita_ppp": 0.30,
     "life_expectancy": 0.25,
@@ -34,87 +31,57 @@ INDEX_WEIGHTS = {
     "unemployment_pct": 0.05,
 }
 
-
-# Get the latest available record for each country
 def latest_by_country(df, year=None):
-
     data = df.copy()
-
     if year is not None:
         data = data[data["year"] <= year]
+    return data.sort_values("year").groupby("country", as_index=False).tail(1)
 
-    data = data.sort_values("year")
-
-    return data.groupby("country", as_index=False).tail(1)
-
-
-# Calculate a development index for each country and year
 def build_development_index(df):
-
+    """Annual cross-sectional min-max index. Requires >= 4 of 6 dimensions."""
     data = df.copy()
+    directions = {k: 1 for k in INDEX_WEIGHTS}
+    directions["unemployment_pct"] = -1
 
-    for column in INDEX_WEIGHTS:
+    # Normalize within each year so changes in global scale over time do not
+    # dominate the comparison. A constant or fully missing annual column stays NaN.
+    for col, direction in directions.items():
+        norm_col = col + "_norm"
+        if col not in data:
+            data[norm_col] = np.nan
+            continue
 
-        if column not in data.columns:
-            data[column] = np.nan
+        def normalize_year(series):
+            lo, hi = series.min(), series.max()
+            if pd.isna(lo) or pd.isna(hi) or hi == lo:
+                return pd.Series(np.nan, index=series.index)
+            scaled = (series - lo) / (hi - lo)
+            return scaled if direction == 1 else 1 - scaled
 
-        # Normalize values between 0 and 1 for each year
-        minimum = data.groupby("year")[column].transform("min")
-        maximum = data.groupby("year")[column].transform("max")
+        data[norm_col] = data.groupby("year")[col].transform(normalize_year)
 
-        difference = maximum - minimum
-
-        data[column + "_norm"] = (
-            (data[column] - minimum) / difference
-        )
-
-        # Lower unemployment is better
-        if column == "unemployment_pct":
-            data[column + "_norm"] = 1 - data[column + "_norm"]
-
-    # Calculate weighted average
-    total_score = 0
-    total_weight = 0
-    available_dimensions = 0
-
-    for column, weight in INDEX_WEIGHTS.items():
-
-        normalized_column = column + "_norm"
-
-        total_score += data[normalized_column].fillna(0) * weight
-        total_weight += data[normalized_column].notna() * weight
-        available_dimensions += data[normalized_column].notna()
-
+    norm_cols = [k + "_norm" for k in INDEX_WEIGHTS]
+    weights = pd.Series(INDEX_WEIGHTS)
+    numerator = data[norm_cols].mul(weights.values, axis=1).sum(axis=1, min_count=1)
+    available_weight = data[norm_cols].notna().mul(weights.values, axis=1).sum(axis=1)
     data["development_index"] = np.where(
-        (available_dimensions >= 4) & (total_weight > 0),
-        total_score / total_weight * 100,
+        (data[norm_cols].notna().sum(axis=1) >= 4) & (available_weight > 0),
+        numerator / available_weight * 100,
         np.nan
     )
-
     return data
 
-
-# Compare emerging economies with established economies
 def convergence_table(df):
-
-    data = df.dropna(
-        subset=["gdp_per_capita_ppp"]
-    ).copy()
-
-    established = data[data["group"] == "Established"]
-
-    average = established.groupby("year")[
+    """Compare each emerging country's PPP income with established-group mean."""
+    data = df.dropna(subset=["gdp_per_capita_ppp"]).copy()
+    group_mean = data[data.group == "Established"].groupby("year")[
         "gdp_per_capita_ppp"
-    ].mean()
-
-    data["established_mean_ppp"] = data["year"].map(average)
-
+    ].mean().rename("established_mean_ppp")
+    data = data.join(group_mean, on="year")
     data["income_ratio_to_established"] = (
         data["gdp_per_capita_ppp"] / data["established_mean_ppp"]
     )
-
     data["income_gap_ppp"] = (
         data["established_mean_ppp"] - data["gdp_per_capita_ppp"]
     )
-
     return data

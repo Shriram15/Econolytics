@@ -5,7 +5,6 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 
-from config import COUNTRIES
 from analysis_utils import METRICS, latest_by_country
 
 
@@ -21,6 +20,22 @@ st.set_page_config(
 
 st.title("🌍 Econolytics")
 st.caption("Exploring Economic Indicators Across Emerging and Established Economies | 2000–2024")
+
+
+# --------------------------------------------------
+# DISPLAY SETTINGS
+# --------------------------------------------------
+
+GROUP_COLORS = {
+    "Emerging": "#E69F00",
+    "Established": "#0072B2"
+}
+
+CHART_LABELS = {
+    "country": "Country",
+    "year": "Year",
+    "group": "Economic group"
+}
 
 
 # --------------------------------------------------
@@ -137,7 +152,12 @@ with tab1:
         x="country",
         y=selected_metric,
         color="group",
-        title=METRICS[selected_metric]
+        title=METRICS[selected_metric],
+        labels={
+            **CHART_LABELS,
+            selected_metric: METRICS[selected_metric]
+        },
+        color_discrete_map=GROUP_COLORS
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -156,7 +176,12 @@ with tab1:
         y=selected_metric,
         color="group",
         markers=True,
-        title="Average Indicator by Economic Group"
+        title="Average Indicator by Economic Group",
+        labels={
+            **CHART_LABELS,
+            selected_metric: METRICS[selected_metric]
+        },
+        color_discrete_map=GROUP_COLORS
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -200,7 +225,11 @@ with tab2:
         x="year",
         y=country_metric,
         markers=True,
-        title=f"{chosen_country}: {METRICS[country_metric]}"
+        title=f"{chosen_country}: {METRICS[country_metric]}",
+        labels={
+            **CHART_LABELS,
+            country_metric: METRICS[country_metric]
+        }
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -235,7 +264,11 @@ with tab3:
         y=comparison_metric,
         color="country",
         markers=True,
-        title=f"{METRICS[comparison_metric]} Across Countries"
+        title=f"{METRICS[comparison_metric]} Across Countries",
+        labels={
+            **CHART_LABELS,
+            comparison_metric: METRICS[comparison_metric]
+        }
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -255,7 +288,12 @@ with tab3:
         x="country",
         y=comparison_metric,
         color="group",
-        title="Country Comparison"
+        title="Country Comparison",
+        labels={
+            **CHART_LABELS,
+            comparison_metric: METRICS[comparison_metric]
+        },
+        color_discrete_map=GROUP_COLORS
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -287,7 +325,12 @@ with tab4:
         stat_data,
         x=stat_metric,
         color="group",
-        title=f"Distribution of {METRICS[stat_metric]}"
+        title=f"Distribution of {METRICS[stat_metric]}",
+        labels={
+            **CHART_LABELS,
+            stat_metric: METRICS[stat_metric]
+        },
+        color_discrete_map=GROUP_COLORS
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -300,7 +343,12 @@ with tab4:
         x="group",
         y=stat_metric,
         color="group",
-        title=f"{METRICS[stat_metric]} by Economic Group"
+        title=f"{METRICS[stat_metric]} by Economic Group",
+        labels={
+            **CHART_LABELS,
+            stat_metric: METRICS[stat_metric]
+        },
+        color_discrete_map=GROUP_COLORS
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -325,7 +373,9 @@ with tab4:
 
     if len(available_metrics) >= 2:
 
-        correlation = numeric_data.corr()
+        # Replace internal column names with display names
+        correlation_data = numeric_data.rename(columns=METRICS)
+        correlation = correlation_data.corr()
 
         fig = px.imshow(
             correlation,

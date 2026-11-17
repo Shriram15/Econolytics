@@ -1,4 +1,4 @@
-,missing_count,missing_percentage
+,missing_count,missing_pct
 country_code,0,0.0
 year,0,0.0
 gdp_current_usd,0,0.0
@@ -19,3 +19,4 @@ country,0,0.0
 group,0,0.0
 trade_openness_pct_gdp,0,0.0
 gdp_per_capita_yoy_pct,8,4.0
+real_gdp_yoy_pct_check,8,4.0
